@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>图片垂直翻转</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: auto;
+        }
+        #thumbnail {
+            display: none;
+            border: 1px solid black;
+            margin-top: 10px;
+            max-width: 500px;
+            max-height: 500px;
+            object-fit: contain;
+            display: block;
+        }
+        #controls {
+            margin-top: 15px;
+        }
+        label {
+            margin-right: 5px;
+            font-weight: bold;
+        }
+        input[type=number] {
+            width: 60px;
+            padding: 4px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 6px 14px;
+            cursor: pointer;
+        }
+        #loadingMessage {
+            text-align: center;
+            font-style: italic;
+            margin-top: 15px;
+            display: none;
+        }
+        #imageCanvas {
+            border: 1px solid black;
+            margin-top: 15px;
+            max-width: 100%;
+        }
+        #downloadButton {
+            margin-top: 15px;
+            padding: 6px 14px;
+            cursor: pointer;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="imageInput" accept="image/*">
+    <img id="thumbnail" alt="Image Preview">
+
+    <div id="controls">
+        <label for="sliceInput">切分份数：</label>
+        <input type="number" id="sliceInput" value="2" min="1" max="16">
+        <button id="processButton">处理图片</button>
+        <button id="downloadButton">下载图片</button>
+    </div>
+
+    <div id="loadingMessage">处理中...</div>
+    <canvas id="imageCanvas"></canvas>
+
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const thumbnail = document.getElementById('thumbnail');        
+        const canvas = document.getElementById('imageCanvas');
+        const downloadButton = document.getElementById('downloadButton');
+        const processButton = document.getElementById('processButton');
+        const ctx = canvas.getContext('2d');
+        const loadingMessage = document.getElementById('loadingMessage');
+
+        let img;
+        let originalFileName = 'image';
+
+        imageInput.addEventListener('change', handleImageUpload);
+        processButton.addEventListener('click', () => { if (img) flipAndDrawImage(img); });
+        downloadButton.addEventListener('click', downloadImage);
+
+        imageInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                originalFileName = file.name;
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    thumbnail.src = e.target.result;
+                    thumbnail.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                thumbnail.style.display = 'none';
+                alert("请选择一个有效的图片文件。");
+            }
+        });
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                alert("请选择一个图片文件。");
+                return;
+            }
+            if (!file.type.startsWith('image/')) {
+                alert("请选择一个有效的图片文件。");
+                imageInput.value = "";
+                return;
+            }
+
+            originalFileName = file.name;
+
+            loadingMessage.style.display = 'block';
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                img = new Image();
+                img.onload = function() {
+                    loadingMessage.style.display = 'none';
+                };
+                img.onerror = function () {
+                    loadingMessage.style.display = 'none';
+                    alert("图片加载失败，请检查图片格式");
+                }
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function flipAndDrawImage(image) {
+            const width = image.width;
+            const height = image.height;
+            const sliceInput = document.getElementById('sliceInput');
+            const sliceCount = parseInt(sliceInput.value) || 1;
+
+            if (isNaN(sliceCount) || sliceCount < 1) {
+                alert("请输入有效的切分份数（必须是大于 0 的整数）。");
+                return;
+            }
+            // 新切分策略：第一段吃余量
+            const baseHeight = Math.floor(height / sliceCount);
+            const remainder = height % sliceCount;
+
+            const sliceHeights = Array(sliceCount).fill(baseHeight);
+            sliceHeights[0] += remainder; // 第一段吃多余像素
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            let currentY = 0;
+            for (let i = 0; i < sliceCount; i++) {
+                const sliceHeight = sliceHeights[i];
+                const srcY = height - (currentY + sliceHeight); // 从底部往上翻转画
+                ctx.drawImage(image, 0, srcY, width, sliceHeight, 0, currentY, width, sliceHeight);
+                currentY += sliceHeight;
+            }
+
+            downloadButton.style.display = 'inline-block';
+        }
+        function downloadImage() {
+            const dataURL = canvas.toDataURL('image/png');
+
+            let dotIndex = originalFileName.lastIndexOf('.');
+            let baseName = dotIndex !== -1 ? originalFileName.substring(0, dotIndex) : originalFileName;
+            let extension = dotIndex !== -1 ? originalFileName.substring(dotIndex) : '.png';
+
+            const now = new Date();
+            const timestamp = now.getFullYear().toString()
+                + (now.getMonth() + 1).toString().padStart(2, '0')
+                + now.getDate().toString().padStart(2, '0') + '_'
+                + now.getHours().toString().padStart(2, '0')
+                + now.getMinutes().toString().padStart(2, '0')
+                + now.getSeconds().toString().padStart(2, '0');
+//const finalName = `${baseName}_${timestamp}${extension}`;
+            const finalName = `${baseName}${extension}`;
+
+            const a = document.createElement('a');
+            a.href = dataURL;
+            a.download = finalName;
+            a.click();
+        }
+    </script>
+</body>
+</html>
