@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>图片垂直翻转</title>
+    <title>图片切片打乱/还原</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -16,7 +16,6 @@
             max-width: 500px;
             max-height: 500px;
             object-fit: contain;
-            display: block;
         }
         #controls {
             margin-top: 15px;
@@ -54,19 +53,27 @@
     </style>
 </head>
 <body>
+    <h1>图像切片打乱/还原</h1>
+    <details open>
+        <summary>工具说明</summary>
+        <div><span style="color:#ff4d00">
+          这个工具采用类似《JM天堂》对图片的防盗链处理方式，将图片纵向打乱，同时也可以还原图片<br /> 此工具可以利用网页下载到电脑离线使用。——OTA<br /></span>
+        </div>
+    </details>
+    <br /><br />
     <input type="file" id="imageInput" accept="image/*">
     <img id="thumbnail" alt="Image Preview">
 
     <div id="controls">
         <label for="sliceInput">切分份数：</label>
         <input type="number" id="sliceInput" value="2" min="1" max="16">
-        <button id="processButton">处理图片</button>
+        <button id="processButton">还原图片</button>
+        <button id="restoreButton">处理图片</button>
         <button id="downloadButton">下载图片</button>
     </div>
 
     <div id="loadingMessage">处理中...</div>
     <canvas id="imageCanvas"></canvas>
-
 
     <script>
         const imageInput = document.getElementById('imageInput');
@@ -74,6 +81,7 @@
         const canvas = document.getElementById('imageCanvas');
         const downloadButton = document.getElementById('downloadButton');
         const processButton = document.getElementById('processButton');
+        const restoreButton = document.getElementById('restoreButton');
         const ctx = canvas.getContext('2d');
         const loadingMessage = document.getElementById('loadingMessage');
 
@@ -82,45 +90,26 @@
 
         imageInput.addEventListener('change', handleImageUpload);
         processButton.addEventListener('click', () => { if (img) flipAndDrawImage(img); });
+        restoreButton.addEventListener('click', () => { if (img) restoreImage(img); });
         downloadButton.addEventListener('click', downloadImage);
-
-        imageInput.addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file && file.type.startsWith('image/')) {
-                originalFileName = file.name;
-
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    thumbnail.src = e.target.result;
-                    thumbnail.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            } else {
-                thumbnail.style.display = 'none';
-                alert("请选择一个有效的图片文件。");
-            }
-        });
 
         function handleImageUpload(event) {
             const file = event.target.files[0];
-            if (!file) {
-                alert("请选择一个图片文件。");
-                return;
-            }
-            if (!file.type.startsWith('image/')) {
+            if (!file || !file.type.startsWith('image/')) {
                 alert("请选择一个有效的图片文件。");
-                imageInput.value = "";
                 return;
             }
 
             originalFileName = file.name;
-
             loadingMessage.style.display = 'block';
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 img = new Image();
                 img.onload = function() {
                     loadingMessage.style.display = 'none';
+                    thumbnail.src = img.src;
+                    thumbnail.style.display = 'block';
                 };
                 img.onerror = function () {
                     loadingMessage.style.display = 'none';
@@ -134,51 +123,70 @@
         function flipAndDrawImage(image) {
             const width = image.width;
             const height = image.height;
-            const sliceInput = document.getElementById('sliceInput');
-            const sliceCount = parseInt(sliceInput.value) || 1;
+            const sliceCount = parseInt(document.getElementById('sliceInput').value) || 1;
 
-            if (isNaN(sliceCount) || sliceCount < 1) {
-                alert("请输入有效的切分份数（必须是大于 0 的整数）。");
+            if (sliceCount < 1) {
+                alert("请输入大于 0 的切分份数");
                 return;
             }
-            // 新切分策略：第一段吃余量
+
             const baseHeight = Math.floor(height / sliceCount);
             const remainder = height % sliceCount;
-
             const sliceHeights = Array(sliceCount).fill(baseHeight);
-            sliceHeights[0] += remainder; // 第一段吃多余像素
+            sliceHeights[0] += remainder;
 
             canvas.width = width;
             canvas.height = height;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, width, height);
 
             let currentY = 0;
             for (let i = 0; i < sliceCount; i++) {
                 const sliceHeight = sliceHeights[i];
-                const srcY = height - (currentY + sliceHeight); // 从底部往上翻转画
+                const srcY = height - (currentY + sliceHeight);
                 ctx.drawImage(image, 0, srcY, width, sliceHeight, 0, currentY, width, sliceHeight);
                 currentY += sliceHeight;
             }
 
             downloadButton.style.display = 'inline-block';
         }
+
+        function restoreImage(image) {
+            const width = image.width;
+            const height = image.height;
+            const sliceCount = parseInt(document.getElementById('sliceInput').value) || 1;
+
+            if (sliceCount < 1) {
+                alert("请输入大于 0 的切分份数");
+                return;
+            }
+
+            const baseHeight = Math.floor(height / sliceCount);
+            const remainder = height % sliceCount;
+            const sliceHeights = Array(sliceCount).fill(baseHeight);
+            sliceHeights[0] += remainder;
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.clearRect(0, 0, width, height);
+
+            let currentY = 0;
+            for (let i = 0; i < sliceCount; i++) {
+                const sliceHeight = sliceHeights[i];
+                const srcY = currentY;
+                const dstY = height - (currentY + sliceHeight);
+                ctx.drawImage(image, 0, srcY, width, sliceHeight, 0, dstY, width, sliceHeight);
+                currentY += sliceHeight;
+            }
+
+            downloadButton.style.display = 'inline-block';
+        }
+
         function downloadImage() {
             const dataURL = canvas.toDataURL('image/png');
-
             let dotIndex = originalFileName.lastIndexOf('.');
             let baseName = dotIndex !== -1 ? originalFileName.substring(0, dotIndex) : originalFileName;
             let extension = dotIndex !== -1 ? originalFileName.substring(dotIndex) : '.png';
-
-            const now = new Date();
-            const timestamp = now.getFullYear().toString()
-                + (now.getMonth() + 1).toString().padStart(2, '0')
-                + now.getDate().toString().padStart(2, '0') + '_'
-                + now.getHours().toString().padStart(2, '0')
-                + now.getMinutes().toString().padStart(2, '0')
-                + now.getSeconds().toString().padStart(2, '0');
-//const finalName = `${baseName}_${timestamp}${extension}`;
             const finalName = `${baseName}${extension}`;
-
             const a = document.createElement('a');
             a.href = dataURL;
             a.download = finalName;
